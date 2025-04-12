@@ -1,0 +1,37 @@
+name: Deploy MERN App to EC2
+
+on:
+  push:
+    branches: [ master ]  # Trigger when code is pushed to the 'main' branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+    - name: Deploy to EC2 instance
+      run: |
+        ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          cd ${{ secrets.EC2_PATH }}
+          git pull origin master
+          
+          # Install backend dependencies
+          npm install --prefix server
+          
+          # Install frontend dependencies and build
+          npm install --prefix client
+          npm run build --prefix client
+          
+          # Restart backend using PM2
+          pm2 restart mern-app || pm2 start server/index.js --name mern-app
+        EOF
